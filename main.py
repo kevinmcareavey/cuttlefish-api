@@ -377,9 +377,7 @@ class TasksResource:
     def __init__(self, db_path):
         self.db_path = db_path
 
-    def on_get(self, request, response):
-        resource_uuid = request.get_param("problem")
-
+    def on_get(self, request, response, problem_id):
         connection = connect(self.db_path)
         cursor = connection.cursor()
 
@@ -396,7 +394,7 @@ class TasksResource:
             )
         """)
 
-        result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (resource_uuid, )).fetchone()
+        result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (problem_id, )).fetchone()
 
         connection.close()
 
@@ -416,7 +414,7 @@ class RequirementsResource:
     def __init__(self, db_path):
         self.db_path = db_path
 
-    def on_put(self, request, response):
+    def on_post(self, request, response):
         home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple, set]))
 
         connection = connect(self.db_path)
@@ -473,7 +471,7 @@ if __name__ == "__main__":
     app.add_route("/schedule", ScheduleResource("shared.db"))
     # app.add_route("/tasks", TasksResource("shared.db"))
     app.add_route("/problems", ProblemResource("shared.db"))
-    app.add_route("/tasks", TasksResource("shared.db"))
+    app.add_route("/tasks/{problem_id}", TasksResource("shared.db"))
     app.add_route("/requirements", RequirementsResource("shared.db"))
 
     print(f"Listening on http://{HOST}:{PORT}")
