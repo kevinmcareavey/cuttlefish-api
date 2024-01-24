@@ -1,0 +1,171 @@
+openapi: 3.0.3
+info:
+  title: Cuttlefish API
+  description: |-
+    Specification for the Cuttlefish home scheduler API.
+  version: 0.0.1
+externalDocs:
+  description: GitHub repository
+  url: "https://github.com/kevinmcareavey/cuttlefish-api"
+servers:
+  - url: "http://localhost:8080"
+paths:
+  /prices:
+    get:
+      summary: Retrieve price data
+      description: Retrieve all import and export price data for week.
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Price"
+  /requirements:
+    post:
+      summary: Submit requirements
+      description: Submit new requirements for schedule.
+      requestBody:
+        description: Update an existent pet in the store
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Problem"
+        required: true
+      responses:
+        "200":
+          description: Accepted requirements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resource"
+  /tasks/{problem}:
+    get:
+      summary: Retrieve optimal task schedule
+      description: Retrieve an optimal task schedule for specified problem.
+      parameters:
+        - name: problem
+          in: path
+          description: UUID for problem resource
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 9964d310-669c-47b0-9e7b-5b6ae880b1c5
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+components:
+  schemas:
+    Price:
+      type: object
+      properties:
+        import_price:
+          type: number
+          format: float
+          example: 7.245
+        export_price:
+          type: number
+          format: float
+          example: 4.58
+    Task:
+      type: object
+      properties:
+        device:
+          type: string
+          enum: [Washer, Dryer, Dishwasher, Vehicle, Battery]
+          example: Battery
+        action:
+          type: string
+          enum: [On, Charge, Discharge]
+          example: Charge
+        start:
+          type: integer
+          format: int32
+          example: 2
+        duration:
+          type: integer
+          format: int32
+          example: 3
+    Problem:
+      type: object
+      properties:
+        horizon:
+          type: integer
+          format: int32
+          example: 168
+        battery:
+          type: object
+          properties:
+            capacity:
+              type: integer
+              format: int32
+              example: 3
+            rate:
+              type: integer
+              format: int32
+              example: 3
+            initial_level:
+              type: integer
+              format: int32
+              example: 0
+            min_required_level:
+              type: integer
+              format: int32
+              example: 0
+        appliances:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+                enum: [Washer, Dryer, Dishwasher, Vehicle]
+                example: Dishwasher
+              duration:
+                type: integer
+                format: int32
+                example: 1
+              rate:
+                type: number
+                format: float
+                example: 1.2
+              min_required_cycles:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timesteps:
+                      type: array
+                      items:
+                        type: integer
+                        format: int32
+                        example: 19
+                      example: [19, 20, 21, 22]
+                    min_required_cycles:
+                      type: integer
+                      format: int32
+                      example: 1
+              dependencies:
+                type: array
+                items:
+                  type: integer
+                  format: int32
+                  nullable: true
+                  example: null
+                example: [null]
+    Resource:
+      type: object
+      properties:
+        resource:
+          type: string
+          format: uuid
+          example: 9964d310-669c-47b0-9e7b-5b6ae880b1c5
