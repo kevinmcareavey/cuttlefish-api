@@ -1,8 +1,7 @@
 openapi: 3.0.3
 info:
   title: Cuttlefish API
-  description: |-
-    Specification for the Cuttlefish home scheduler API.
+  description: Specification for the Cuttlefish home scheduler API.
   version: 0.0.1
 externalDocs:
   description: GitHub repository
