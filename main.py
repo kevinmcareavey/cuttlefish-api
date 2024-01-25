@@ -1,4 +1,3 @@
-import json
 import math
 from dataclasses import asdict, dataclass, is_dataclass
 from itertools import groupby
@@ -11,24 +10,9 @@ from dacite import Config, from_dict
 from falcon import App, HTTP_200, HTTP_404, HTTP_503, MEDIA_JSON
 from pendulum import now
 
-from data import APPLIANCES, EXPORT_PRICES_2019_06_24, EXPORT_PRICES_2019_11_11, EXPORT_PRICES_2019_12_02, EXPORT_PRICES_UNKNOWN, IMPORT_PRICES_2019_06_24, IMPORT_PRICES_2019_11_11, IMPORT_PRICES_2019_12_02, IMPORT_PRICES_UNKNOWN
-
-HOST = "0.0.0.0"
-PORT = 8080
+from data import APPLIANCES, EXPORT_PRICES, IMPORT_PRICES
 
 DURATIONS = [2, 3, 1, 8]
-
-# IMPORT_PRICES = IMPORT_PRICES_UNKNOWN
-# EXPORT_PRICES = EXPORT_PRICES_UNKNOWN
-
-# IMPORT_PRICES = IMPORT_PRICES_2019_12_02
-# EXPORT_PRICES = EXPORT_PRICES_2019_12_02
-
-# IMPORT_PRICES = IMPORT_PRICES_2019_11_11
-# EXPORT_PRICES = EXPORT_PRICES_2019_11_11
-
-IMPORT_PRICES = IMPORT_PRICES_2019_06_24
-EXPORT_PRICES = EXPORT_PRICES_2019_06_24
 
 
 class PriceResource:
@@ -37,82 +21,6 @@ class PriceResource:
         response.content_type = MEDIA_JSON
         data = [{"import_price": import_price, "export_price": export_price} for import_price, export_price in zip(IMPORT_PRICES, EXPORT_PRICES)]
         response.text = dumps(data)
-
-
-# def iter_battery_tasks(battery_plan):
-#     discharge_index = 1
-#     charge_index = 1
-#     timestep = 0
-#     for battery_action, group in groupby(battery_plan):
-#         duration = sum(1 for _ in group)
-#         if battery_action != 0:
-#             yield {"name": f"Battery discharge ({discharge_index})" if battery_action == -1 else f"Battery charge ({charge_index})", "start": timestep, "duration": duration}
-#             if battery_action == -1:
-#                 discharge_index += 1
-#             elif battery_action == 1:
-#                 charge_index += 1
-#         timestep += duration
-#
-#
-# def iter_appliance_tasks(appliance_label, appliance_plan):
-#     cycle_index = 1
-#     start = 0
-#     for appliance_action, group in groupby(appliance_plan):
-#         duration = sum(1 for _ in group)
-#         if appliance_action != 0:
-#             yield {"name": f"{appliance_label} ({cycle_index})", "start": start, "duration": duration}
-#             cycle_index += 1
-#         start += duration
-#
-#
-# def iter_tasks(plan):
-#     task_index = 1
-#     for appliance_index, appliance_label in enumerate(APPLIANCES):
-#         for task in iter_appliance_tasks(appliance_label, [action["appliances"][appliance_index] for action in plan]):
-#             yield {"id": f"Task ({task_index})", **task}
-#             task_index += 1
-#     for task in iter_battery_tasks([action["battery"] for action in plan]):
-#         yield {"id": f"Task ({task_index})", **task}
-#         task_index += 1
-#
-#
-# class TasksResource:
-#     def __init__(self, db_path):
-#         self.db_path = db_path
-#
-#     def on_get(self, request, response):
-#         resource_uuid = request.get_param("problem")
-#
-#         connection = connect(self.db_path)
-#         cursor = connection.cursor()
-#
-#         cursor.execute("PRAGMA journal_mode=WAL")
-#
-#         cursor.execute("""
-#             CREATE TABLE IF NOT EXISTS problems (
-#                 problem_id INTEGER PRIMARY KEY,
-#                 created_at TIMESTAMP,
-#                 problem_data JSON,
-#                 resource_uuid UUID,
-#                 updated_at TIMESTAMP,
-#                 solution_data JSON
-#             )
-#         """)
-#
-#         result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (resource_uuid, )).fetchone()
-#
-#         connection.close()
-#
-#         if result:
-#             solution = loads(result[0]) if result[0] else None
-#             if solution:
-#                 response.status = HTTP_200
-#                 response.content_type = MEDIA_JSON
-#                 response.text = dumps(list(iter_tasks(solution)), separators=(",", ":"))
-#             else:
-#                 response.status = HTTP_503
-#         else:
-#             response.status = HTTP_404
 
 
 @dataclass(frozen=True)
@@ -133,41 +41,6 @@ class BatteryParameters:
 
     def __str__(self):
         return self.__dict__.__str__()
-
-
-# @dataclass(frozen=True)
-# class ApplianceParameters:
-#     label: str
-#     duration: int
-#     rate: float
-#     min_required_cycles: int
-#
-#     def __post_init__(self):
-#         assert self.duration > 0
-#         assert self.rate > 0
-#         assert self.min_required_cycles >= 0
-#
-#     def __repr__(self):
-#         return self.__dict__.__repr__()
-#
-#     def __str__(self):
-#         return self.__dict__.__str__()
-#
-#
-# @dataclass(frozen=True)
-# class HomeParameters:
-#     horizon: int
-#     battery: BatteryParameters
-#     appliances: tuple[ApplianceParameters, ...]
-#
-#     def __post_init__(self):
-#         assert self.horizon > 0
-#
-#     def __repr__(self):
-#         return self.__dict__.__repr__()
-#
-#     def __str__(self):
-#         return self.__dict__.__str__()
 
 
 @dataclass(frozen=True)
@@ -464,15 +337,19 @@ class RequirementsResource:
 
 
 if __name__ == "__main__":
+    HOST = "0.0.0.0"
+    PORT = 8080
+    DB_PATH = "shared.db"
+
     app = App(cors_enable=True)
     app.req_options.strip_url_path_trailing_slash = True
 
     app.add_route("/prices", PriceResource())
-    app.add_route("/schedule", ScheduleResource("shared.db"))
+    app.add_route("/schedule", ScheduleResource(DB_PATH))
     # app.add_route("/tasks", TasksResource("shared.db"))
-    app.add_route("/problems", ProblemResource("shared.db"))
-    app.add_route("/tasks/{problem_id}", TasksResource("shared.db"))
-    app.add_route("/requirements", RequirementsResource("shared.db"))
+    app.add_route("/problems", ProblemResource(DB_PATH))
+    app.add_route("/tasks/{problem_id}", TasksResource(DB_PATH))
+    app.add_route("/requirements", RequirementsResource(DB_PATH))
 
     print(f"Listening on http://{HOST}:{PORT}")
     run(app, HOST, PORT)
