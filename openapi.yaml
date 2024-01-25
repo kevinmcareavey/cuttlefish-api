@@ -8,6 +8,8 @@ externalDocs:
   url: "https://github.com/kevinmcareavey/cuttlefish-api"
 servers:
   - url: "http://localhost:8080"
+security:
+  - bearer_auth: []
 paths:
   /prices:
     get:
@@ -22,6 +24,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Price"
+        "401":
+          description: Bearer token is missing or invalid
   /requirements:
     post:
       summary: Submit requirements
@@ -40,6 +44,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Resource"
+        "401":
+          description: Bearer token is missing or invalid
   /tasks/{problem}:
     get:
       summary: Retrieve optimal task schedule
@@ -62,7 +68,14 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Task"
+        "401":
+          description: Bearer token is missing or invalid
 components:
+  securitySchemes:
+    bearer_auth:
+      type: http
+      scheme: bearer
+      bearerFormat: username,api_token
   schemas:
     Price:
       type: object
