@@ -17,7 +17,7 @@ paths:
       description: Retrieve all import and export price data for week.
       responses:
         "200":
-          description: successful operation
+          description: Prices successfully retrieved
           content:
             application/json:
               schema:
