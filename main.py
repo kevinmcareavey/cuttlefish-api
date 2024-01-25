@@ -1,10 +1,12 @@
 import math
+import tomllib
 from dataclasses import asdict, dataclass, is_dataclass
 from itertools import groupby
 from json import JSONEncoder, dumps, loads
 from sqlite3 import connect
 from uuid import uuid4
 
+import dacite
 from bjoern import run
 from dacite import Config, from_dict
 from falcon import App, HTTP_200, HTTP_404, HTTP_503, MEDIA_JSON
@@ -14,6 +16,23 @@ from pendulum import now
 from data import APPLIANCES, EXPORT_PRICES, IMPORT_PRICES
 
 DURATIONS = [2, 3, 1, 8]
+
+
+@dataclass
+class APIConfig:
+    host: str
+    port: int
+
+
+@dataclass
+class DBConfig:
+    path: str
+
+
+@dataclass
+class Config:
+    api: APIConfig
+    database: DBConfig
 
 
 class PriceResource:
@@ -360,15 +379,18 @@ def user_validator(db_path, username, api_token):
 
 
 if __name__ == "__main__":
-    HOST = "0.0.0.0"
-    PORT = 8080
-    DB_PATH = "shared.db"
+    config_path = "config.toml"
+
+    with open(config_path, "rb") as toml_file:
+        toml_data = tomllib.load(toml_file)
+
+    config = dacite.from_dict(Config, toml_data)
 
     def user_loader(bearer_token):
         tokens = [token.strip() for token in bearer_token.split(",")]
         if len(tokens) == 2:
             username, api_token = tokens
-            return user_validator("shared.db", username, api_token)
+            return user_validator(config.database.path, username, api_token)
         return None
 
     auth_backend = TokenAuthBackend(user_loader, auth_header_prefix="Bearer")
@@ -378,11 +400,11 @@ if __name__ == "__main__":
     app.req_options.strip_url_path_trailing_slash = True
 
     app.add_route("/prices", PriceResource())
-    app.add_route("/schedule", ScheduleResource(DB_PATH))
-    # app.add_route("/tasks", TasksResource("shared.db"))
-    app.add_route("/problems", ProblemResource(DB_PATH))
-    app.add_route("/tasks/{problem_id}", TasksResource(DB_PATH))
-    app.add_route("/requirements", RequirementsResource(DB_PATH))
+    app.add_route("/schedule", ScheduleResource(config.database.path))
+    # app.add_route("/tasks", TasksResource(config.database.path))
+    app.add_route("/problems", ProblemResource(config.database.path))
+    app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
+    app.add_route("/requirements", RequirementsResource(config.database.path))
 
-    print(f"Listening on http://{HOST}:{PORT}")
-    run(app, HOST, PORT)
+    print(f"Listening on http://{config.api.host}:{config.api.port}")
+    run(app, config.api.host, config.api.port)
