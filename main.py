@@ -30,7 +30,7 @@ class DBConfig:
 
 
 @dataclass
-class Config:
+class GlobalConfig:
     api: APIConfig
     database: DBConfig
 
@@ -418,7 +418,7 @@ if __name__ == "__main__":
     with open(config_path, "rb") as toml_file:
         toml_data = tomllib.load(toml_file)
 
-    config = dacite.from_dict(Config, toml_data)
+    config = dacite.from_dict(GlobalConfig, toml_data)
 
     add_test_users(config.database.path)
 
