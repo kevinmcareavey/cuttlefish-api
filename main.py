@@ -8,6 +8,7 @@ from uuid import uuid4
 from bjoern import run
 from dacite import Config, from_dict
 from falcon import App, HTTP_200, HTTP_404, HTTP_503, MEDIA_JSON
+from falcon_auth import FalconAuthMiddleware, TokenAuthBackend
 from pendulum import now
 
 from data import APPLIANCES, EXPORT_PRICES, IMPORT_PRICES
@@ -336,12 +337,44 @@ class RequirementsResource:
         response.text = dumps({"resource": resource_uuid}, separators=(",", ":"))
 
 
+def user_validator(db_path, username, api_token):
+    connection = connect(db_path)
+    cursor = connection.cursor()
+
+    cursor.execute("PRAGMA journal_mode=WAL")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            created_at TIMESTAMP,
+            username TEXT UNIQUE,
+            api_token UUID
+        )
+    """)
+
+    result = cursor.execute("SELECT username, api_token FROM users WHERE username = ? AND api_token = ? LIMIT 1", (username, api_token)).fetchone()
+
+    connection.close()
+
+    return username if result and result[0] == username and result[1] == api_token else None
+
+
 if __name__ == "__main__":
     HOST = "0.0.0.0"
     PORT = 8080
     DB_PATH = "shared.db"
 
-    app = App(cors_enable=True)
+    def user_loader(bearer_token):
+        tokens = [token.strip() for token in bearer_token.split(",")]
+        if len(tokens) == 2:
+            username, api_token = tokens
+            return user_validator("shared.db", username, api_token)
+        return None
+
+    auth_backend = TokenAuthBackend(user_loader, auth_header_prefix="Bearer")
+    auth_middleware = FalconAuthMiddleware(auth_backend)
+
+    app = App(middleware=[auth_middleware], cors_enable=True)
     app.req_options.strip_url_path_trailing_slash = True
 
     app.add_route("/prices", PriceResource())
