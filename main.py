@@ -378,6 +378,40 @@ def user_validator(db_path, username, api_token):
     return username if result and result[0] == username and result[1] == api_token else None
 
 
+def add_users(db_path, api_tokens):
+    connection = connect(db_path)
+    cursor = connection.cursor()
+
+    cursor.execute("PRAGMA journal_mode=WAL")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            created_at TIMESTAMP,
+            username TEXT UNIQUE,
+            api_token UUID
+        )
+    """)
+
+    def iter_insert_rows():
+        for username, api_token in api_tokens.items():
+            yield now().to_iso8601_string(), username, api_token
+
+    cursor.executemany("INSERT OR IGNORE INTO users (created_at, username, api_token) VALUES (?, ?, ?)", iter_insert_rows())
+
+    connection.commit()
+    connection.close()
+
+
+def add_test_users(db_path):
+    api_tokens = {
+        "alice": "028b6996-18be-419b-a6a2-5b14acca0418",
+        "bob": "6899a98d-4406-4143-8431-dc0025d6a568",
+        "carol": "b295ff45-fa84-440e-ba0d-2ae6e7acca64",
+    }
+    add_users(db_path, api_tokens)
+
+
 if __name__ == "__main__":
     config_path = "config.toml"
 
@@ -385,6 +419,8 @@ if __name__ == "__main__":
         toml_data = tomllib.load(toml_file)
 
     config = dacite.from_dict(Config, toml_data)
+
+    add_test_users(config.database.path)
 
     def user_loader(bearer_token):
         tokens = [token.strip() for token in bearer_token.split(",")]
