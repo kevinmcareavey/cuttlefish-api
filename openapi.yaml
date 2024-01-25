@@ -17,7 +17,7 @@ paths:
       description: Retrieve all import and export price data for week.
       responses:
         "200":
-          description: Prices successfully retrieved
+          description: Successful operation
           content:
             application/json:
               schema:
@@ -39,7 +39,7 @@ paths:
         required: true
       responses:
         "200":
-          description: Accepted requirements
+          description: Successful operation
           content:
             application/json:
               schema:
@@ -61,7 +61,7 @@ paths:
             example: 9964d310-669c-47b0-9e7b-5b6ae880b1c5
       responses:
         "200":
-          description: successful operation
+          description: Successful operation
           content:
             application/json:
               schema:
