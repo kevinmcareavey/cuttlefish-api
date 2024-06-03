@@ -9,7 +9,7 @@ from uuid import uuid4
 import dacite
 from bjoern import run
 from dacite import Config, from_dict
-from falcon import App, HTTP_200, HTTP_404, HTTP_503, MEDIA_JSON
+from falcon import App, HTTP_200, HTTP_404, HTTP_503, MEDIA_JSON, HTTP_400
 from falcon_auth import FalconAuthMiddleware, TokenAuthBackend
 from pendulum import now
 
@@ -279,11 +279,14 @@ class TasksResource:
         connection.close()
 
         if result:
-            solution = loads(result[0]) if result[0] else None
+            solution = result[0]
             if solution:
-                response.status = HTTP_200
-                response.content_type = MEDIA_JSON
-                response.text = dumps(list(iter_tasks(solution)), separators=(",", ":"))
+                if solution == "unsolvable":
+                    response.status = HTTP_400
+                else:
+                    response.status = HTTP_200
+                    response.content_type = MEDIA_JSON
+                    response.text = dumps(list(iter_tasks(loads(solution))), separators=(",", ":"))
             else:
                 response.status = HTTP_503
         else:
