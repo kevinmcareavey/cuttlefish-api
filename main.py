@@ -178,7 +178,7 @@ class ScheduleResource:
             response.status = HTTP_404
 
     def on_put(self, request, response):
-        home_parameters = from_dict(data_class=HomeParameters, data=loads(request.media), config=Config(cast=[tuple]))
+        home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple]))
 
         connection = connect(self.db_path)
         cursor = connection.cursor()
@@ -298,7 +298,7 @@ class RequirementsResource:
         self.db_path = db_path
 
     def on_post(self, request, response):
-        home_parameters = from_dict(data_class=HomeParameters, data=loads(request.media), config=Config(cast=[tuple, set]))
+        home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple, set]))
 
         connection = connect(self.db_path)
         cursor = connection.cursor()
