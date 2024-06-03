@@ -17,6 +17,36 @@ from data import APPLIANCES, EXPORT_PRICES, IMPORT_PRICES
 
 DURATIONS = [2, 3, 1, 8]
 
+CREATE_TABLE_PROBLEMS = """
+    CREATE TABLE IF NOT EXISTS problems (
+        problem_id INTEGER PRIMARY KEY, 
+        created_at TIMESTAMP,
+        problem_data JSON,
+        resource_uuid UUID,
+        retrieved_at TIMESTAMP,
+        updated_at TIMESTAMP,
+        solution_data JSON
+    )
+    """
+
+CREATE_TABLE_REQUESTS = """
+        CREATE TABLE IF NOT EXISTS requests (
+            request_id INTEGER PRIMARY KEY,
+            created_at TIMESTAMP,
+            problem_id INTEGER,
+            FOREIGN KEY(problem_id) REFERENCES problems(problem_id)
+        )
+    """
+
+CREATE_TABLE_USERS = """
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            created_at TIMESTAMP,
+            username TEXT UNIQUE,
+            api_token UUID
+        )
+    """
+
 
 @dataclass
 class APIConfig:
@@ -130,16 +160,7 @@ class ScheduleResource:
 
         cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS problems (
-                problem_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_data JSON,
-                resource_uuid UUID,
-                updated_at TIMESTAMP,
-                solution_data JSON
-            )
-        """)
+        cursor.execute(CREATE_TABLE_PROBLEMS)
 
         result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (resource_uuid, )).fetchone()
 
@@ -157,23 +178,14 @@ class ScheduleResource:
             response.status = HTTP_404
 
     def on_put(self, request, response):
-        home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple]))
+        home_parameters = from_dict(data_class=HomeParameters, data=loads(request.media), config=Config(cast=[tuple]))
 
         connection = connect(self.db_path)
         cursor = connection.cursor()
 
         cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS problems (
-                problem_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_data JSON,
-                resource_uuid UUID,
-                updated_at TIMESTAMP,
-                solution_data JSON
-            )
-        """)
+        cursor.execute(CREATE_TABLE_PROBLEMS)
 
         result = cursor.execute("SELECT problem_id, resource_uuid FROM problems WHERE problem_data = ?", (dumps(request.media, separators=(",", ":")), )).fetchone()
 
@@ -184,14 +196,7 @@ class ScheduleResource:
 
         problem_id, resource_uuid = result
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS requests (
-                request_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_id INTEGER,
-                FOREIGN KEY(problem_id) REFERENCES problems(problem_id)
-            )
-        """)
+        cursor.execute(CREATE_TABLE_REQUESTS)
 
         data = now().to_iso8601_string(), problem_id
         print(f"INSERT {data}")
@@ -215,16 +220,7 @@ class ProblemResource:
 
         cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS problems (
-                problem_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_data JSON,
-                resource_uuid UUID,
-                updated_at TIMESTAMP,
-                solution_data JSON
-            )
-        """)
+        cursor.execute(CREATE_TABLE_PROBLEMS)
 
         result = cursor.execute("SELECT resource_uuid FROM problems WHERE solution_data IS NOT NULL").fetchall()
 
@@ -276,16 +272,7 @@ class TasksResource:
 
         cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS problems (
-                problem_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_data JSON,
-                resource_uuid UUID,
-                updated_at TIMESTAMP,
-                solution_data JSON
-            )
-        """)
+        cursor.execute(CREATE_TABLE_PROBLEMS)
 
         result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (problem_id, )).fetchone()
 
@@ -308,41 +295,25 @@ class RequirementsResource:
         self.db_path = db_path
 
     def on_post(self, request, response):
-        home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple, set]))
+        home_parameters = from_dict(data_class=HomeParameters, data=loads(request.media), config=Config(cast=[tuple, set]))
 
         connection = connect(self.db_path)
         cursor = connection.cursor()
 
         cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS problems (
-                problem_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_data JSON,
-                resource_uuid UUID,
-                updated_at TIMESTAMP,
-                solution_data JSON
-            )
-        """)
+        cursor.execute(CREATE_TABLE_PROBLEMS)
 
         result = cursor.execute("SELECT problem_id, resource_uuid FROM problems WHERE problem_data = ?", (dumps(request.media, separators=(",", ":")), )).fetchone()
 
         if result is None:
             resource_uuid = str(uuid4())
-            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None
-            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, updated_at, solution_data) VALUES (?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
+            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None
+            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, retrieved_at, updated_at, solution_data) VALUES (?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
 
         problem_id, resource_uuid = result
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS requests (
-                request_id INTEGER PRIMARY KEY,
-                created_at TIMESTAMP,
-                problem_id INTEGER,
-                FOREIGN KEY(problem_id) REFERENCES problems(problem_id)
-            )
-        """)
+        cursor.execute(CREATE_TABLE_REQUESTS)
 
         data = now().to_iso8601_string(), problem_id
         print(f"INSERT {data}")
@@ -362,14 +333,7 @@ def user_validator(db_path, username, api_token):
 
     cursor.execute("PRAGMA journal_mode=WAL")
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            created_at TIMESTAMP,
-            username TEXT UNIQUE,
-            api_token UUID
-        )
-    """)
+    cursor.execute(CREATE_TABLE_USERS)
 
     result = cursor.execute("SELECT username, api_token FROM users WHERE username = ? AND api_token = ? LIMIT 1", (username, api_token)).fetchone()
 
@@ -384,14 +348,7 @@ def add_users(db_path, api_tokens):
 
     cursor.execute("PRAGMA journal_mode=WAL")
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            created_at TIMESTAMP,
-            username TEXT UNIQUE,
-            api_token UUID
-        )
-    """)
+    cursor.execute(CREATE_TABLE_USERS)
 
     def iter_insert_rows():
         for username, api_token in api_tokens.items():
