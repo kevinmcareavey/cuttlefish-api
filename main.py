@@ -1,3 +1,4 @@
+import argparse
 import math
 import tomllib
 from dataclasses import asdict, dataclass, is_dataclass
@@ -373,10 +374,11 @@ def add_test_users(db_path):
 
 
 if __name__ == "__main__":
-    config_path = "config.toml"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("toml_file", metavar="TOML", type=argparse.FileType("rb"), help="load config from %(metavar)s file")
 
-    with open(config_path, "rb") as toml_file:
-        toml_data = tomllib.load(toml_file)
+    args = parser.parse_args()
+    toml_data = tomllib.load(args.toml_file)
 
     config = dacite.from_dict(GlobalConfig, toml_data)
 
