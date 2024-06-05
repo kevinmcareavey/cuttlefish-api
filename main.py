@@ -49,6 +49,16 @@ CREATE_TABLE_USERS = """
         )
     """
 
+CREATE_TABLE_SURVEY = """
+        CREATE TABLE IF NOT EXISTS survey (
+            response_id INTEGER PRIMARY KEY,
+            user_id INTEGER,
+            created_at TIMESTAMP,
+            response_data JSON,
+            FOREIGN KEY(user_id) REFERENCES users(user_id)
+        )
+    """
+
 
 @dataclass
 class APIConfig:
@@ -288,11 +298,11 @@ def user_validator(db_path, username, api_token):
 
     cursor.execute(CREATE_TABLE_USERS)
 
-    result = cursor.execute("SELECT username, api_token FROM users WHERE username = ? AND api_token = ? LIMIT 1", (username, api_token)).fetchone()
+    result = cursor.execute("SELECT user_id, username, api_token FROM users WHERE username = ? AND api_token = ? LIMIT 1", (username, api_token)).fetchone()
 
     connection.close()
 
-    return username if result and result[0] == username and result[1] == api_token else None
+    return {"user_id": result[0], "username": result[1]} if result and result[1] == username and result[2] == api_token else None
 
 
 def add_test_users(db_path):
@@ -317,6 +327,28 @@ def add_test_users(db_path):
 
     connection.commit()
     connection.close()
+
+
+class SurveyResource:
+    def __init__(self, db_path):
+        self.db_path = db_path
+
+    def on_post(self, request, response):
+        connection = connect(self.db_path)
+        cursor = connection.cursor()
+
+        cursor.execute("PRAGMA journal_mode=WAL")
+
+        cursor.execute(CREATE_TABLE_SURVEY)
+
+        data = request.context["user"]["user_id"], now().to_iso8601_string(), dumps(request.media, separators=(",", ":"))
+        print(f"INSERT {data}")
+        cursor.execute("INSERT INTO SURVEY (user_id, created_at, response_data) VALUES (?, ?, ?)", data)
+
+        connection.commit()
+        connection.close()
+
+        response.status = HTTP_200
 
 
 if __name__ == "__main__":
@@ -347,6 +379,7 @@ if __name__ == "__main__":
     app.add_route("/prices", PriceResource())
     app.add_route("/requirements", RequirementsResource(config.database.path))
     app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
+    app.add_route("/survey", SurveyResource(config.database.path))
 
     print(f"Listening on http://{config.api.host}:{config.api.port}")
     run(app, config.api.host, config.api.port)
