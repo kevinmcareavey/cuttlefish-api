@@ -150,92 +150,6 @@ class HomeParametersEncoder(JSONEncoder):
         return super().default(obj)
 
 
-class ScheduleResource:
-    def __init__(self, db_path):
-        self.db_path = db_path
-
-    def on_get(self, request, response):
-        resource_uuid = request.get_param("problem")
-
-        connection = connect(self.db_path)
-        cursor = connection.cursor()
-
-        cursor.execute("PRAGMA journal_mode=WAL")
-
-        cursor.execute(CREATE_TABLE_PROBLEMS)
-
-        result = cursor.execute("SELECT result_data FROM problems WHERE resource_uuid = ?", (resource_uuid, )).fetchone()
-
-        connection.close()
-
-        if result:
-            solution = loads(result[0]) if result[0] else None
-            if solution:
-                response.status = HTTP_200
-                response.content_type = MEDIA_JSON
-                response.text = dumps(solution, separators=(",", ":"))
-            else:
-                response.status = HTTP_503
-        else:
-            response.status = HTTP_404
-
-    def on_put(self, request, response):
-        home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple]))
-
-        connection = connect(self.db_path)
-        cursor = connection.cursor()
-
-        cursor.execute("PRAGMA journal_mode=WAL")
-
-        cursor.execute(CREATE_TABLE_PROBLEMS)
-
-        result = cursor.execute("SELECT problem_id, resource_uuid FROM problems WHERE problem_data = ?", (dumps(request.media, separators=(",", ":")), )).fetchone()
-
-        if result is None:
-            resource_uuid = str(uuid4())
-            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None, None
-            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, queued_at, result_at, result_status, result_data) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
-
-        problem_id, resource_uuid = result
-
-        cursor.execute(CREATE_TABLE_REQUESTS)
-
-        data = now().to_iso8601_string(), problem_id
-        print(f"INSERT {data}")
-        cursor.execute("INSERT INTO requests (created_at, problem_id) VALUES (?, ?)", data)
-
-        connection.commit()
-        connection.close()
-
-        response.status = HTTP_200
-        response.content_type = MEDIA_JSON
-        response.text = dumps({"resource": resource_uuid}, separators=(",", ":"))
-
-
-class ProblemResource:
-    def __init__(self, db_path):
-        self.db_path = db_path
-
-    def on_get(self, request, response):
-        connection = connect(self.db_path)
-        cursor = connection.cursor()
-
-        cursor.execute("PRAGMA journal_mode=WAL")
-
-        cursor.execute(CREATE_TABLE_PROBLEMS)
-
-        result = cursor.execute("SELECT resource_uuid FROM problems WHERE result_data IS NOT NULL").fetchall()
-
-        connection.close()
-
-        if result:
-            response.status = HTTP_200
-            response.content_type = MEDIA_JSON
-            response.text = dumps([row[0] for row in result], separators=(",", ":"))
-        else:
-            response.status = HTTP_404
-
-
 def iter_appliance_tasks(appliance_label, appliance_plan, cycle_duration):
     timestep = 0
     for appliance_action, group in groupby(appliance_plan):
@@ -365,15 +279,6 @@ def add_users(db_path, api_tokens):
     connection.close()
 
 
-def add_test_users(db_path):
-    api_tokens = {
-        "alice": "028b6996-18be-419b-a6a2-5b14acca0418",
-        "bob": "6899a98d-4406-4143-8431-dc0025d6a568",
-        "carol": "b295ff45-fa84-440e-ba0d-2ae6e7acca64",
-    }
-    add_users(db_path, api_tokens)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("toml_file", metavar="TOML", type=argparse.FileType("rb"), help="load config from %(metavar)s file")
@@ -383,7 +288,11 @@ if __name__ == "__main__":
 
     config = dacite.from_dict(GlobalConfig, toml_data)
 
-    add_test_users(config.database.path)
+    add_users(config.database.path, {
+        "alice": "028b6996-18be-419b-a6a2-5b14acca0418",
+        "bob": "6899a98d-4406-4143-8431-dc0025d6a568",
+        "carol": "b295ff45-fa84-440e-ba0d-2ae6e7acca64",
+    })
 
     def user_loader(bearer_token):
         tokens = [token.strip() for token in bearer_token.split(",")]
@@ -399,11 +308,8 @@ if __name__ == "__main__":
     app.req_options.strip_url_path_trailing_slash = True
 
     app.add_route("/prices", PriceResource())
-    app.add_route("/schedule", ScheduleResource(config.database.path))
-    # app.add_route("/tasks", TasksResource(config.database.path))
-    app.add_route("/problems", ProblemResource(config.database.path))
-    app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
     app.add_route("/requirements", RequirementsResource(config.database.path))
+    app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
 
     print(f"Listening on http://{config.api.host}:{config.api.port}")
     run(app, config.api.host, config.api.port)
