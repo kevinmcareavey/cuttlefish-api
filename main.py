@@ -34,8 +34,10 @@ CREATE_TABLE_PROBLEMS = """
 CREATE_TABLE_REQUESTS = """
         CREATE TABLE IF NOT EXISTS requests (
             request_id INTEGER PRIMARY KEY,
+            user_id INTEGER,
             created_at TIMESTAMP,
             problem_id INTEGER,
+            FOREIGN KEY(user_id) REFERENCES users(user_id),
             FOREIGN KEY(problem_id) REFERENCES problems(problem_id)
         )
     """
@@ -244,9 +246,9 @@ class RequirementsResource:
 
         cursor.execute(CREATE_TABLE_REQUESTS)
 
-        data = now().to_iso8601_string(), problem_id
+        data = request.context["user"]["user_id"], now().to_iso8601_string(), problem_id
         print(f"INSERT {data}")
-        cursor.execute("INSERT INTO requests (created_at, problem_id) VALUES (?, ?)", data)
+        cursor.execute("INSERT INTO requests (user_id, created_at, problem_id) VALUES (?, ?, ?)", data)
 
         connection.commit()
         connection.close()
