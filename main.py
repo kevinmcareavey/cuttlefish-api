@@ -246,6 +246,40 @@ class RequirementsResource:
         response.text = dumps({"resource": resource_uuid}, separators=(",", ":"))
 
 
+class LoginResource:
+    auth = {
+        "auth_disabled": True,
+    }
+
+    def __init__(self, db_path):
+        self.db_path = db_path
+
+    def on_post(self, request, response):
+        username = request.media["username"] if "username" in request.media else None
+
+        connection = connect(self.db_path)
+        cursor = connection.cursor()
+
+        cursor.execute("PRAGMA journal_mode=WAL")
+
+        cursor.execute(CREATE_TABLE_USERS)
+
+        result = cursor.execute("SELECT api_token FROM users WHERE username = ? LIMIT 1", (username, )).fetchone()
+        api_token = result[0] if result and len(result) > 0 else None
+
+        if api_token is None:
+            api_token = str(uuid4())
+            row = now().to_iso8601_string(), username, api_token
+            cursor.execute("INSERT OR IGNORE INTO users (created_at, username, api_token) VALUES (?, ?, ?)", row)
+
+        connection.commit()
+        connection.close()
+
+        response.status = HTTP_200
+        response.content_type = MEDIA_JSON
+        response.text = dumps({"username": username, "token": api_token}, separators=(",", ":"))
+
+
 def user_validator(db_path, username, api_token):
     connection = connect(db_path)
     cursor = connection.cursor()
@@ -261,13 +295,19 @@ def user_validator(db_path, username, api_token):
     return username if result and result[0] == username and result[1] == api_token else None
 
 
-def add_users(db_path, api_tokens):
+def add_test_users(db_path):
     connection = connect(db_path)
     cursor = connection.cursor()
 
     cursor.execute("PRAGMA journal_mode=WAL")
 
     cursor.execute(CREATE_TABLE_USERS)
+
+    api_tokens = {
+        "alice": "028b6996-18be-419b-a6a2-5b14acca0418",
+        "bob": "6899a98d-4406-4143-8431-dc0025d6a568",
+        "carol": "b295ff45-fa84-440e-ba0d-2ae6e7acca64",
+    }
 
     def iter_insert_rows():
         for username, api_token in api_tokens.items():
@@ -288,11 +328,7 @@ if __name__ == "__main__":
 
     config = dacite.from_dict(GlobalConfig, toml_data)
 
-    add_users(config.database.path, {
-        "alice": "028b6996-18be-419b-a6a2-5b14acca0418",
-        "bob": "6899a98d-4406-4143-8431-dc0025d6a568",
-        "carol": "b295ff45-fa84-440e-ba0d-2ae6e7acca64",
-    })
+    add_test_users(config.database.path)
 
     def user_loader(bearer_token):
         tokens = [token.strip() for token in bearer_token.split(",")]
@@ -307,6 +343,7 @@ if __name__ == "__main__":
     app = App(middleware=[auth_middleware], cors_enable=True)
     app.req_options.strip_url_path_trailing_slash = True
 
+    app.add_route("/login", LoginResource(config.database.path))
     app.add_route("/prices", PriceResource())
     app.add_route("/requirements", RequirementsResource(config.database.path))
     app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
