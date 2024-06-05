@@ -24,9 +24,10 @@ CREATE_TABLE_PROBLEMS = """
         created_at TIMESTAMP,
         problem_data JSON,
         resource_uuid UUID,
-        retrieved_at TIMESTAMP,
-        updated_at TIMESTAMP,
-        solution_data JSON
+        queued_at TIMESTAMP,
+        result_at TIMESTAMP,
+        result_status INTEGER,
+        result_data JSON
     )
     """
 
@@ -163,7 +164,7 @@ class ScheduleResource:
 
         cursor.execute(CREATE_TABLE_PROBLEMS)
 
-        result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (resource_uuid, )).fetchone()
+        result = cursor.execute("SELECT result_data FROM problems WHERE resource_uuid = ?", (resource_uuid, )).fetchone()
 
         connection.close()
 
@@ -192,8 +193,8 @@ class ScheduleResource:
 
         if result is None:
             resource_uuid = str(uuid4())
-            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None
-            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, updated_at, solution_data) VALUES (?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
+            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None, None
+            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, queued_at, result_at, result_status, result_data) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
 
         problem_id, resource_uuid = result
 
@@ -223,7 +224,7 @@ class ProblemResource:
 
         cursor.execute(CREATE_TABLE_PROBLEMS)
 
-        result = cursor.execute("SELECT resource_uuid FROM problems WHERE solution_data IS NOT NULL").fetchall()
+        result = cursor.execute("SELECT resource_uuid FROM problems WHERE result_data IS NOT NULL").fetchall()
 
         connection.close()
 
@@ -275,7 +276,7 @@ class TasksResource:
 
         cursor.execute(CREATE_TABLE_PROBLEMS)
 
-        result = cursor.execute("SELECT solution_data FROM problems WHERE resource_uuid = ?", (problem_id, )).fetchone()
+        result = cursor.execute("SELECT result_data FROM problems WHERE resource_uuid = ?", (problem_id, )).fetchone()
 
         connection.close()
 
@@ -312,8 +313,8 @@ class RequirementsResource:
 
         if result is None:
             resource_uuid = str(uuid4())
-            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None
-            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, retrieved_at, updated_at, solution_data) VALUES (?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
+            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None, None
+            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, queued_at, result_at, result_status, result_data) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
 
         problem_id, resource_uuid = result
 
