@@ -2,22 +2,54 @@ openapi: 3.0.3
 info:
   title: Cuttlefish API
   description: Specification for the Cuttlefish home scheduler API.
-  version: 0.0.1
+  version: 0.0.2
 externalDocs:
   description: GitHub repository
   url: "https://github.com/kevinmcareavey/cuttlefish-api"
 servers:
   - url: "http://localhost:8080"
+  - url: "https://cuttlefish-api.bristol-xai.uk"
 security:
   - bearer_auth: []
 paths:
+  /login:
+    post:
+      summary: Retrieve API token for user
+      description: Retrieve API token for user (and register if necessary).
+      security:
+        - {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  pattern: ^[A-Za-z0-9]+$
+                  example: alice
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    format: uuid
+                    example: 028b6996-18be-419b-a6a2-5b14acca0418
+        "400":
+          description: Bad Request
   /prices:
     get:
       summary: Retrieve price data
       description: Retrieve all import and export price data for week.
       responses:
         "200":
-          description: Successful operation
+          description: OK
           content:
             application/json:
               schema:
@@ -25,13 +57,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/Price"
         "401":
-          description: Bearer token is missing or invalid
+          description: Unauthorized
   /requirements:
     post:
       summary: Submit requirements
       description: Submit new requirements for schedule.
       requestBody:
-        description: Update an existent pet in the store
         content:
           application/json:
             schema:
@@ -39,13 +70,15 @@ paths:
         required: true
       responses:
         "200":
-          description: Successful operation
+          description: OK
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Resource"
+        "400":
+          description: Bad Request
         "401":
-          description: Bearer token is missing or invalid
+          description: Unauthorized
   /tasks/{problem}:
     get:
       summary: Retrieve optimal task schedule
@@ -61,15 +94,17 @@ paths:
             example: 9964d310-669c-47b0-9e7b-5b6ae880b1c5
       responses:
         "200":
-          description: Successful operation
+          description: OK
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/Result"
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
         "401":
-          description: Bearer token is missing or invalid
+          description: Unauthorized
 components:
   securitySchemes:
     bearer_auth:
@@ -88,25 +123,6 @@ components:
           type: number
           format: float
           example: 4.58
-    Task:
-      type: object
-      properties:
-        device:
-          type: string
-          enum: [Washer, Dryer, Dishwasher, Vehicle, Battery]
-          example: Battery
-        action:
-          type: string
-          enum: [On, Charge, Discharge]
-          example: Charge
-        start:
-          type: integer
-          format: int32
-          example: 2
-        duration:
-          type: integer
-          format: int32
-          example: 3
     Problem:
       type: object
       properties:
@@ -181,3 +197,34 @@ components:
           type: string
           format: uuid
           example: 9964d310-669c-47b0-9e7b-5b6ae880b1c5
+    Task:
+      type: object
+      properties:
+        device:
+          type: string
+          enum: [Washer, Dryer, Dishwasher, Vehicle, Battery]
+          example: Battery
+        action:
+          type: string
+          enum: [On, Charge, Discharge]
+          example: Charge
+        start:
+          type: integer
+          format: int32
+          example: 2
+        duration:
+          type: integer
+          format: int32
+          example: 3
+    Result:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [Solved, Unsolvable, TimeExceeded, SpaceExceeded, Error]
+          example: Solved
+        tasks:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/Task"
