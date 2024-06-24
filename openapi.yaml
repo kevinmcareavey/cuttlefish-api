@@ -109,6 +109,38 @@ paths:
           description: Bad Request
         "401":
           description: Unauthorized
+  /survey:
+    post:
+      summary: Submit survey response
+      description: Submit new survey response for user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              example: {
+                "energy_saving": false,
+                "stem_background": false,
+                "ai_experience": true,
+                "tutorial_scenario": 3,
+                "tutorial_setting": 2,
+                "tutorial_explanations": 4,
+                "ai_schedule_opinion": 5,
+                "explanation_usefulness": 5,
+                "real_world_helpfulness": 3,
+                "understand_ai_planning": 5,
+                "xai_adoption": 4,
+                "ai_confidence": 2,
+                "savedSchedules": ["90af67a2-1d15-4531-a286-173741b60d9e", "a95765e9-df5f-4edb-b793-6ad6d5a841da"]
+                }
+        required: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
 components:
   securitySchemes:
     bearer_auth:
