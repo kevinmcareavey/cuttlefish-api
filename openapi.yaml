@@ -37,6 +37,10 @@ paths:
               schema:
                 type: object
                 properties:
+                  username:
+                    type: string
+                    pattern: ^[A-Za-z0-9]+$
+                    example: alice
                   token:
                     type: string
                     format: uuid
