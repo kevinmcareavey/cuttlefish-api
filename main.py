@@ -2,6 +2,7 @@ import argparse
 import math
 import tomllib
 from dataclasses import asdict, dataclass, is_dataclass
+from enum import Enum
 from itertools import groupby
 from json import JSONEncoder, dumps, loads
 from sqlite3 import connect
@@ -10,13 +11,11 @@ from uuid import uuid4
 import dacite
 from bjoern import run
 from dacite import Config, from_dict
-from falcon import App, HTTP_200, HTTP_404, HTTP_503, MEDIA_JSON, HTTP_400
+from falcon import App, HTTP_200, MEDIA_JSON, HTTP_400, HTTP_204
 from falcon_auth import FalconAuthMiddleware, TokenAuthBackend
 from pendulum import now
 
-from data import APPLIANCES, EXPORT_PRICES, IMPORT_PRICES
-
-DURATIONS = [2, 3, 1, 4]
+from data import EXPORT_PRICES, IMPORT_PRICES
 
 CREATE_TABLE_PROBLEMS = """
     CREATE TABLE IF NOT EXISTS problems (
@@ -184,10 +183,18 @@ def iter_battery_tasks(battery_plan):
         timestep += duration
 
 
-def iter_tasks(plan):
-    for appliance_index, appliance_label in enumerate(APPLIANCES):
-        yield from iter_appliance_tasks(appliance_label, [action["appliances"][appliance_index] for action in plan], DURATIONS[appliance_index])
+def iter_tasks(plan, appliance_labels, appliance_durations):
+    for appliance_index, (appliance_label, appliance_duration) in enumerate(zip(appliance_labels, appliance_durations)):
+        yield from iter_appliance_tasks(appliance_label, [action["appliances"][appliance_index] for action in plan], appliance_duration)
     yield from iter_battery_tasks([action["battery"] for action in plan])
+
+
+class ResultStatus(Enum):
+    Solved = 1
+    Unsolvable = 0
+    TimeExceeded = -1
+    SpaceExceeded = -2
+    Error = -3
 
 
 class TasksResource:
@@ -202,23 +209,25 @@ class TasksResource:
 
         cursor.execute(CREATE_TABLE_PROBLEMS)
 
-        result = cursor.execute("SELECT result_data FROM problems WHERE resource_uuid = ?", (problem_id, )).fetchone()
+        try:
+            result = cursor.execute("SELECT problem_data, result_status, result_data FROM problems WHERE resource_uuid = ?", (problem_id, )).fetchone()
+            problem_data, result_status, result_data = result
 
-        connection.close()
+            connection.close()
 
-        if result:
-            solution = result[0]
-            if solution:
-                if solution == "unsolvable":
-                    response.status = HTTP_400
-                else:
-                    response.status = HTTP_200
-                    response.content_type = MEDIA_JSON
-                    response.text = dumps(list(iter_tasks(loads(solution))), separators=(",", ":"))
+            if result_status is not None:
+                status = ResultStatus(result_status)
+                home_parameters = from_dict(data_class=HomeParameters, data=loads(problem_data), config=Config(cast=[tuple, set]))
+                appliance_labels = [appliance.label for appliance in home_parameters.appliances]
+                appliance_durations = [appliance.duration for appliance in home_parameters.appliances]
+                tasks = list(iter_tasks(loads(result_data), appliance_labels, appliance_durations)) if result_data is not None else None
+                response.status = HTTP_200
+                response.content_type = MEDIA_JSON
+                response.text = dumps({"status": status.name, "tasks": tasks}, separators=(",", ":"))
             else:
-                response.status = HTTP_503
-        else:
-            response.status = HTTP_404
+                response.status = HTTP_204
+        except Exception:
+            response.status = HTTP_400
 
 
 class RequirementsResource:
@@ -272,7 +281,7 @@ class LoginResource:
     def on_post(self, request, response):
         username = request.media["username"] if "username" in request.media else None
 
-        if username and username.isalnum():
+        if username is not None and username.isalnum():
             connection = connect(self.db_path)
             cursor = connection.cursor()
 
@@ -281,7 +290,7 @@ class LoginResource:
             cursor.execute(CREATE_TABLE_USERS)
 
             result = cursor.execute("SELECT api_token FROM users WHERE username = ? LIMIT 1", (username, )).fetchone()
-            api_token = result[0] if result and len(result) > 0 else None
+            api_token = result[0] if result is not None and len(result) > 0 else None
 
             if api_token is None:
                 api_token = str(uuid4())
@@ -310,7 +319,7 @@ def user_validator(db_path, username, api_token):
 
     connection.close()
 
-    return {"user_id": result[0], "username": result[1]} if result and result[1] == username and result[2] == api_token else None
+    return {"user_id": result[0], "username": result[1]} if result is not None and result[1] == username and result[2] == api_token else None
 
 
 def add_test_users(db_path):
