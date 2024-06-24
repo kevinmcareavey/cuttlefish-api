@@ -226,36 +226,39 @@ class RequirementsResource:
         self.db_path = db_path
 
     def on_post(self, request, response):
-        home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple, set]))
+        try:
+            home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple, set]))
 
-        connection = connect(self.db_path)
-        cursor = connection.cursor()
+            connection = connect(self.db_path)
+            cursor = connection.cursor()
 
-        cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute(CREATE_TABLE_PROBLEMS)
+            cursor.execute(CREATE_TABLE_PROBLEMS)
 
-        result = cursor.execute("SELECT problem_id, resource_uuid FROM problems WHERE problem_data = ?", (dumps(request.media, separators=(",", ":")), )).fetchone()
+            result = cursor.execute("SELECT problem_id, resource_uuid FROM problems WHERE problem_data = ?", (dumps(request.media, separators=(",", ":")), )).fetchone()
 
-        if result is None:
-            resource_uuid = str(uuid4())
-            data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None, None
-            result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, queued_at, result_at, result_status, result_data) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
+            if result is None:
+                resource_uuid = str(uuid4())
+                data = now().to_iso8601_string(), dumps(home_parameters, cls=HomeParametersEncoder, separators=(",", ":")), resource_uuid, None, None, None, None
+                result = cursor.execute("INSERT OR IGNORE INTO problems (created_at, problem_data, resource_uuid, queued_at, result_at, result_status, result_data) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING problem_id, resource_uuid", data).fetchone()
 
-        problem_id, resource_uuid = result
+            problem_id, resource_uuid = result
 
-        cursor.execute(CREATE_TABLE_REQUESTS)
+            cursor.execute(CREATE_TABLE_REQUESTS)
 
-        data = request.context["user"]["user_id"], now().to_iso8601_string(), problem_id
-        print(f"INSERT {data}")
-        cursor.execute("INSERT INTO requests (user_id, created_at, problem_id) VALUES (?, ?, ?)", data)
+            data = request.context["user"]["user_id"], now().to_iso8601_string(), problem_id
+            print(f"INSERT {data}")
+            cursor.execute("INSERT INTO requests (user_id, created_at, problem_id) VALUES (?, ?, ?)", data)
 
-        connection.commit()
-        connection.close()
+            connection.commit()
+            connection.close()
 
-        response.status = HTTP_200
-        response.content_type = MEDIA_JSON
-        response.text = dumps({"resource": resource_uuid}, separators=(",", ":"))
+            response.status = HTTP_200
+            response.content_type = MEDIA_JSON
+            response.text = dumps({"resource": resource_uuid}, separators=(",", ":"))
+        except Exception:
+            response.status = HTTP_400
 
 
 class LoginResource:
