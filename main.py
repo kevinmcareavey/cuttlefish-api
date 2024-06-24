@@ -16,7 +16,7 @@ from pendulum import now
 
 from data import APPLIANCES, EXPORT_PRICES, IMPORT_PRICES
 
-DURATIONS = [2, 3, 1, 8]
+DURATIONS = [2, 3, 1, 4]
 
 CREATE_TABLE_PROBLEMS = """
     CREATE TABLE IF NOT EXISTS problems (
@@ -269,27 +269,30 @@ class LoginResource:
     def on_post(self, request, response):
         username = request.media["username"] if "username" in request.media else None
 
-        connection = connect(self.db_path)
-        cursor = connection.cursor()
+        if username and username.isalnum():
+            connection = connect(self.db_path)
+            cursor = connection.cursor()
 
-        cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA journal_mode=WAL")
 
-        cursor.execute(CREATE_TABLE_USERS)
+            cursor.execute(CREATE_TABLE_USERS)
 
-        result = cursor.execute("SELECT api_token FROM users WHERE username = ? LIMIT 1", (username, )).fetchone()
-        api_token = result[0] if result and len(result) > 0 else None
+            result = cursor.execute("SELECT api_token FROM users WHERE username = ? LIMIT 1", (username, )).fetchone()
+            api_token = result[0] if result and len(result) > 0 else None
 
-        if api_token is None:
-            api_token = str(uuid4())
-            row = now().to_iso8601_string(), username, api_token
-            cursor.execute("INSERT OR IGNORE INTO users (created_at, username, api_token) VALUES (?, ?, ?)", row)
+            if api_token is None:
+                api_token = str(uuid4())
+                row = now().to_iso8601_string(), username, api_token
+                cursor.execute("INSERT OR IGNORE INTO users (created_at, username, api_token) VALUES (?, ?, ?)", row)
 
-        connection.commit()
-        connection.close()
+            connection.commit()
+            connection.close()
 
-        response.status = HTTP_200
-        response.content_type = MEDIA_JSON
-        response.text = dumps({"username": username, "token": api_token}, separators=(",", ":"))
+            response.status = HTTP_200
+            response.content_type = MEDIA_JSON
+            response.text = dumps({"username": username, "token": api_token}, separators=(",", ":"))
+        else:
+            response.status = HTTP_400
 
 
 def user_validator(db_path, username, api_token):
