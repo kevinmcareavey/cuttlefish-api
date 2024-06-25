@@ -4,3 +4,6 @@ port = 8080
 
 [database]
 path = "/path/to/cuttlefish.db"
+
+[prices]
+path = "/path/to/prices.json"

@@ -4,7 +4,7 @@ import tomllib
 from dataclasses import asdict, dataclass, is_dataclass
 from enum import Enum
 from itertools import groupby
-from json import JSONEncoder, dumps, loads
+from json import JSONEncoder, dumps, loads, load
 from sqlite3 import connect
 from uuid import uuid4
 
@@ -14,8 +14,6 @@ from dacite import Config, from_dict
 from falcon import App, HTTP_200, MEDIA_JSON, HTTP_400, HTTP_204
 from falcon_auth import FalconAuthMiddleware, TokenAuthBackend
 from pendulum import now
-
-from data import EXPORT_PRICES, IMPORT_PRICES
 
 CREATE_TABLE_PROBLEMS = """
     CREATE TABLE IF NOT EXISTS problems (
@@ -73,17 +71,25 @@ class DBConfig:
 
 
 @dataclass
+class PriceConfig:
+    path: str
+
+
+@dataclass
 class GlobalConfig:
     api: APIConfig
     database: DBConfig
+    prices: PriceConfig
 
 
 class PriceResource:
+    def __init__(self, data):
+        self.data = data
+
     def on_get(self, request, response):
         response.status = HTTP_200
         response.content_type = MEDIA_JSON
-        data = [{"import_price": import_price, "export_price": export_price} for import_price, export_price in zip(IMPORT_PRICES, EXPORT_PRICES)]
-        response.text = dumps(data)
+        response.text = dumps(self.data)
 
 
 @dataclass(frozen=True)
@@ -377,6 +383,13 @@ if __name__ == "__main__":
 
     config = dacite.from_dict(GlobalConfig, toml_data)
 
+    with open(config.prices.path) as json_file:
+        dataset = load(json_file)
+        selected_keys = {"import_price", "export_price"}
+        prices = [{key: datapoint[key] for key in datapoint if key in selected_keys} for datapoint in dataset]
+        assert len(prices) == 168
+        assert all("import_price" in datapoint and "export_price" in datapoint and datapoint["import_price"] is not None and datapoint["export_price"] is not None for datapoint in prices)
+
     add_test_users(config.database.path)
 
     def user_loader(bearer_token):
@@ -393,7 +406,7 @@ if __name__ == "__main__":
     app.req_options.strip_url_path_trailing_slash = True
 
     app.add_route("/login", LoginResource(config.database.path))
-    app.add_route("/prices", PriceResource())
+    app.add_route("/prices", PriceResource(prices))
     app.add_route("/requirements", RequirementsResource(config.database.path))
     app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
     app.add_route("/survey", SurveyResource(config.database.path))
