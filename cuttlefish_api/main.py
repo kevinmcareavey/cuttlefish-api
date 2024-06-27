@@ -374,7 +374,7 @@ class SurveyResource:
         response.status = HTTP_200
 
 
-if __name__ == "__main__":
+def cli():
     parser = argparse.ArgumentParser()
     parser.add_argument("toml_file", metavar="TOML", type=argparse.FileType("rb"), help="load config from %(metavar)s file")
 
@@ -413,3 +413,7 @@ if __name__ == "__main__":
 
     print(f"Listening on http://{config.api.host}:{config.api.port}")
     run(app, config.api.host, config.api.port)
+
+
+if __name__ == "__main__":
+    cli()

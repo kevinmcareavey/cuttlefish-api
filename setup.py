@@ -19,4 +19,7 @@ setup(
     classifiers=[],
     include_package_data=True,
     platforms="any",
+    entry_points={
+        "console_scripts": ["cuttlefish-api=cuttlefish_api.main:cli"],
+    },
 )
