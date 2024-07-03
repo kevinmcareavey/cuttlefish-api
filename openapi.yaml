@@ -102,7 +102,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Result"
+                oneOf:
+                  - $ref: "#/components/schemas/SolvedProblem"
+                  - $ref: "#/components/schemas/UnsolvedProblem"
         "204":
           description: No Content
         "400":
@@ -252,15 +254,25 @@ components:
           type: integer
           format: int32
           example: 3
-    Result:
+    SolvedProblem:
       type: object
       properties:
         status:
           type: string
-          enum: [Solved, Unsolvable, TimeExceeded, SpaceExceeded, Error]
+          enum: [Solved]
           example: Solved
         tasks:
           type: array
-          nullable: true
           items:
             $ref: "#/components/schemas/Task"
+        cost:
+          type: number
+          format: float
+          example: -376.15919999999994
+    UnsolvedProblem:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [Unsolvable, TimeExceeded, SpaceExceeded, Error]
+          example: Unsolvable

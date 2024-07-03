@@ -195,6 +195,15 @@ def iter_tasks(plan, appliance_labels, appliance_durations):
     yield from iter_battery_tasks([action["battery"] for action in plan])
 
 
+def calculate_cost(plan, prices, home_parameters):
+    total_cost = 0.0
+    for action, price in zip(plan, prices):
+        energy = sum([appliance_action * appliance_parameters.rate for appliance_action, appliance_parameters in zip(action["appliances"], home_parameters.appliances)]) + action["battery"] * home_parameters.battery.rate
+        cost = energy * price["import_price"] if energy >= 0 else energy * price["export_price"]
+        total_cost += cost
+    return total_cost
+
+
 class ResultStatus(Enum):
     Solved = 1
     Unsolvable = 0
@@ -204,8 +213,9 @@ class ResultStatus(Enum):
 
 
 class TasksResource:
-    def __init__(self, db_path):
+    def __init__(self, db_path, prices):
         self.db_path = db_path
+        self.prices = prices
 
     def on_get(self, request, response, problem_id):
         connection = connect(self.db_path)
@@ -223,13 +233,22 @@ class TasksResource:
 
             if result_status is not None:
                 status = ResultStatus(result_status)
-                home_parameters = from_dict(data_class=HomeParameters, data=loads(problem_data), config=Config(cast=[tuple, set]))
-                appliance_labels = [appliance.label for appliance in home_parameters.appliances]
-                appliance_durations = [appliance.duration for appliance in home_parameters.appliances]
-                tasks = list(iter_tasks(loads(result_data), appliance_labels, appliance_durations)) if result_data is not None else None
-                response.status = HTTP_200
-                response.content_type = MEDIA_JSON
-                response.text = dumps({"status": status.name, "tasks": tasks}, separators=(",", ":"))
+
+                if status == ResultStatus.Solved:
+                    home_parameters = from_dict(data_class=HomeParameters, data=loads(problem_data), config=Config(cast=[tuple, set]))
+                    appliance_labels = [appliance.label for appliance in home_parameters.appliances]
+                    appliance_durations = [appliance.duration for appliance in home_parameters.appliances]
+                    plan = loads(result_data) if result_data is not None else []
+                    tasks = list(iter_tasks(plan, appliance_labels, appliance_durations))
+                    cost = calculate_cost(plan, self.prices, home_parameters)
+                    response.status = HTTP_200
+                    response.content_type = MEDIA_JSON
+                    response.text = dumps({"status": status.name, "tasks": tasks, "cost": cost}, separators=(",", ":"))
+                else:
+                    response.status = HTTP_200
+                    response.content_type = MEDIA_JSON
+                    response.text = dumps({"status": status.name}, separators=(",", ":"))
+
             else:
                 response.status = HTTP_204
         except Exception:
@@ -408,7 +427,7 @@ def cli():
     app.add_route("/login", LoginResource(config.database.path))
     app.add_route("/prices", PriceResource(prices))
     app.add_route("/requirements", RequirementsResource(config.database.path))
-    app.add_route("/tasks/{problem_id}", TasksResource(config.database.path))
+    app.add_route("/tasks/{problem_id}", TasksResource(config.database.path, prices))
     app.add_route("/survey", SurveyResource(config.database.path))
 
     print(f"Listening on http://{config.api.host}:{config.api.port}")
