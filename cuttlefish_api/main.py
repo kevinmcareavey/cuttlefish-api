@@ -263,6 +263,9 @@ class RequirementsResource:
         try:
             home_parameters = from_dict(data_class=HomeParameters, data=request.media, config=Config(cast=[tuple, set]))
 
+            if any(dependency is not None for appliance in home_parameters.appliances for dependency in appliance.dependencies):
+                raise Exception("appliance dependencies are not currently supported")
+
             connection = connect(self.db_path)
             cursor = connection.cursor()
 
