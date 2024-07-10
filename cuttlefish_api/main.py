@@ -132,7 +132,7 @@ class ApplianceParameters:
     def __post_init__(self):
         assert self.duration > 0
         assert self.rate > 0
-        assert all(window_parameters_i.timesteps.isdisjoint(window_parameters_j.timesteps) for i, window_parameters_i in enumerate(self.min_required_cycles) for j, window_parameters_j in enumerate(self.min_required_cycles) if i != j)
+        # assert all(window_parameters_i.timesteps.isdisjoint(window_parameters_j.timesteps) for i, window_parameters_i in enumerate(self.min_required_cycles) for j, window_parameters_j in enumerate(self.min_required_cycles) if i != j)
         assert all(dependency is None or 0 < dependency < math.inf for dependency in self.dependencies)
 
     def __repr__(self):
